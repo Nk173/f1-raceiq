@@ -10,81 +10,87 @@ function listMyCalendars_toResults() {
   const rows = cals.map(c => [c.getName(), c.getId()]);
   sh.getRange(2,1, rows.length, 2).setValues(rows);
 }
-function scheduleTriggerAtRaceEnd_AUS_2026() {
-  const CALENDAR_ID = "38bfdc6a35a5bb015082c5c9e9f4ebb1f80ae86d0bc299a658130cca300b505e@group.calendar.google.com";
-  const END_BUFFER_MINUTES = 5;
+/**
+ * Reads Season Config, finds the next upcoming race that hasn't been
+ * processed, and schedules three time-based triggers:
+ *   1) rebuildChoicesLatestPerEmail — 10 min before race start (lock in final picks)
+ *   2) fillResultsForNextRace      — ~2 h 15 min after race start (est. race end + buffer)
+ *   3) emailScoresForNextRace      — ~3 h after race start
+ *
+ * Call once from the RaceIQ menu; after that the chain auto-continues
+ * because emailScoresForNextRace() calls scheduleNextRace() when done.
+ */
+function scheduleNextRace() {
+  const CHOICES_BEFORE_MINUTES = 10;   // lock choices before race start
+  const RESULTS_AFTER_MINUTES  = 30;   // run fillResults 30 min after race start
+  const EMAIL_AFTER_MINUTES    = 60;   // run emailScores 60 min after race start
 
-  // robust match tokens (avoid relying on emoji / punctuation)
-  const MUST_CONTAIN = [
-    "AUSTRALIAN GRAND PRIX 2026",
-    "RACE"
-  ];
+  const { data, idx } = getSeasonConfigData_();
+  const now = new Date();
 
-  const ss = SpreadsheetApp.getActive();
-  const resultsSheet = ss.getSheetByName("Results") || ss.insertSheet("Results");
+  // Find the first upcoming round where results haven't been fetched
+  let next = null;
+  for (const row of data) {
+    if (String(row[idx.ResultsFetched] || "").trim().toLowerCase() === "yes") continue;
 
-  const cal = CalendarApp.getCalendarById(CALENDAR_ID);
-  if (!cal) throw new Error(`Calendar not found: ${CALENDAR_ID}`);
+    const raceDateTime = parseRaceDateTime_(row[idx.RaceDate], String(row[idx.RaceTimeUTC] || ""));
+    if (!raceDateTime || raceDateTime < now) continue; // skip past races
 
-  // Wide window around likely race date
-  const start = new Date(Date.UTC(2026, 1, 15)); // Feb 15 2026
-  const end   = new Date(Date.UTC(2026, 3, 15)); // Apr 15 2026
-
-  const events = cal.getEvents(start, end);
-
-  const norm = (s) => String(s || "")
-    .toUpperCase()
-    .replace(/[–—]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const matches = events.filter(e => {
-    const t = norm(e.getTitle());
-    return MUST_CONTAIN.every(token => t.includes(token));
-  });
-
-  if (matches.length === 0) {
-    resultsSheet.clear();
-    resultsSheet.getRange(1,1).setValue("No matching AUS 2026 Race event found in Formula 1 calendar.");
-    resultsSheet.getRange(2,1).setValue("Here are events in the search window (title, start, end):");
-
-    const rows = events.slice(0, 200).map(e => [e.getTitle(), e.getStartTime(), e.getEndTime()]);
-    if (rows.length) resultsSheet.getRange(4,1, rows.length, 3).setValues(rows);
-
-    throw new Error("Race calendar event not found. Check title tokens or widen date window.");
+    next = {
+      round:    Number(row[idx.Round]),
+      raceName: String(row[idx.RaceName] || ""),
+      raceDateTime: raceDateTime
+    };
+    break;
   }
 
-  // If multiple, pick the earliest start time
-  matches.sort((a, b) => a.getStartTime() - b.getStartTime());
-  const raceEvent = matches[0];
+  if (!next) {
+    Logger.log("No upcoming unprocessed races to schedule.");
+    SpreadsheetApp.getActive().toast("All races have been processed or are in the past.", "RaceIQ");
+    return;
+  }
 
-  const endTime = raceEvent.getEndTime();
-  const triggerTime = new Date(endTime.getTime() + END_BUFFER_MINUTES * 60 * 1000);
+  // Compute trigger times
+  const choicesTriggerAt  = new Date(next.raceDateTime.getTime() - CHOICES_BEFORE_MINUTES * 60000);
+  const resultsTriggerAt  = new Date(next.raceDateTime.getTime() + RESULTS_AFTER_MINUTES * 60000);
+  const emailTriggerAt    = new Date(next.raceDateTime.getTime() + EMAIL_AFTER_MINUTES * 60000);
 
-  // Delete existing triggers for this handler (avoid duplicates)
+  // Remove existing triggers for these handlers to avoid duplicates
   for (const t of ScriptApp.getProjectTriggers()) {
-    if (t.getHandlerFunction() === "fillResults_2026_Australia") {
+    const fn = t.getHandlerFunction();
+    if (fn === "rebuildChoicesLatestPerEmail" || fn === "fillResultsForNextRace" || fn === "emailScoresForNextRace") {
       ScriptApp.deleteTrigger(t);
     }
   }
 
-  // Create one-time trigger
-  ScriptApp.newTrigger("fillResults_2026_Australia")
+  // Create one-shot triggers
+  ScriptApp.newTrigger("rebuildChoicesLatestPerEmail")
     .timeBased()
-    .at(triggerTime)
+    .at(choicesTriggerAt)
+    .create();
+
+  ScriptApp.newTrigger("fillResultsForNextRace")
+    .timeBased()
+    .at(resultsTriggerAt)
+    .create();
+
+  ScriptApp.newTrigger("emailScoresForNextRace")
+    .timeBased()
+    .at(emailTriggerAt)
     .create();
 
   // Confirm in Results sheet
-  resultsSheet.clear();
-  resultsSheet.getRange(1,1).setValue("Trigger scheduled ✅");
-  resultsSheet.getRange(2,1).setValue("Matched event title");
-  resultsSheet.getRange(2,2).setValue(raceEvent.getTitle());
-  resultsSheet.getRange(3,1).setValue("Event starts");
-  resultsSheet.getRange(3,2).setValue(raceEvent.getStartTime());
-  resultsSheet.getRange(4,1).setValue("Event ends");
-  resultsSheet.getRange(4,2).setValue(endTime);
-  resultsSheet.getRange(5,1).setValue("Trigger will run at (+5 min buffer)");
-  resultsSheet.getRange(5,2).setValue(triggerTime);
-  resultsSheet.getRange(6,1).setValue("Calendar used");
-  resultsSheet.getRange(6,2).setValue("Formula 1");
+  const ss = SpreadsheetApp.getActive();
+  const resultsSheet = ss.getSheetByName("Results") || ss.insertSheet("Results");
+  resultsSheet.getRange(1, 1).setValue("Next race triggers scheduled ✅");
+  resultsSheet.getRange(2, 1).setValue("Race");
+  resultsSheet.getRange(2, 2).setValue(`Round ${next.round}: ${next.raceName}`);
+  resultsSheet.getRange(3, 1).setValue("Race start (UTC)");
+  resultsSheet.getRange(3, 2).setValue(next.raceDateTime);
+  resultsSheet.getRange(4, 1).setValue("Choices trigger (-10 min)");
+  resultsSheet.getRange(4, 2).setValue(choicesTriggerAt);
+  resultsSheet.getRange(5, 1).setValue("Results trigger");
+  resultsSheet.getRange(5, 2).setValue(resultsTriggerAt);
+  resultsSheet.getRange(6, 1).setValue("Email trigger");
+  resultsSheet.getRange(6, 2).setValue(emailTriggerAt);
 }
