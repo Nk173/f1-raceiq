@@ -21,9 +21,9 @@ function listMyCalendars_toResults() {
  * because emailScoresForNextRace() calls scheduleNextRace() when done.
  */
 function scheduleNextRace() {
-  const CHOICES_BEFORE_MINUTES = 10;   // lock choices before race start
-  const RESULTS_AFTER_MINUTES  = 30;   // run fillResults 30 min after race start
-  const EMAIL_AFTER_MINUTES    = 60;   // run emailScores 60 min after race start
+  const CHOICES_BEFORE_MINUTES = 10;   // lock choices 10 min before race start
+  const RESULTS_AFTER_MINUTES  = 180;  // ~3h race + 1h buffer = 4h after start
+  const EMAIL_AFTER_MINUTES    = 240;  // 30 min after results fetch
 
   const { data, idx } = getSeasonConfigData_();
   const now = new Date();

@@ -1,11 +1,18 @@
 function rebuildScores() {
   const ss = SpreadsheetApp.getActive();
-  const formSh = ss.getSheetByName("Choices");
-  const resSh = ss.getSheetByName("Results 2");
-  const scoreSh = ss.getSheetByName("Scores") || ss.insertSheet("Scores");
+
+  // Write per-race scores to "Scores {round}" (e.g. "Scores 2")
+  const props       = PropertiesService.getScriptProperties();
+  const activeRound = parseInt(props.getProperty('WF_ACTIVE_ROUND') || '0', 10);
+  const scoresName  = activeRound > 0 ? 'Scores ' + activeRound : 'Scores';
+  const resultsName = activeRound > 0 ? 'Results ' + activeRound : 'Results 2';
+
+  const formSh  = ss.getSheetByName("Choices");
+  const resSh   = ss.getSheetByName(resultsName);
+  const scoreSh = ss.getSheetByName(scoresName) || ss.insertSheet(scoresName);
 
   if (!formSh) throw new Error("Missing sheet: Choices");
-  if (!resSh) throw new Error("Missing sheet: Results 2");
+  if (!resSh)  throw new Error("Missing sheet: " + resultsName);
 
   // ----- Read Results -----
   const resHeaderRow = 1;
@@ -276,6 +283,97 @@ function rebuildScores() {
   }
   scoreSh.setFrozenRows(1);
   scoreSh.autoResizeColumns(1, outHeaders.length);
+
+  // Always rebuild the cumulative leaderboard after updating a race's scores
+  rebuildLeaderboard();
+}
+
+// ---------------------------------------------------------------------------
+// Cumulative leaderboard — aggregates TotalPoints across all "Scores N" sheets
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans every sheet named "Scores {number}" (e.g. "Scores 1", "Scores 2", …),
+ * sums TotalPoints per team, and writes a ranked "Leaderboard" sheet.
+ *
+ * Columns: Rank | Email | TeamName | Race 1 | Race 2 | … | Total
+ */
+function rebuildLeaderboard() {
+  const ss = SpreadsheetApp.getActive();
+
+  // Collect all "Scores N" sheets, sorted by round number
+  const scoreSheets = ss.getSheets()
+    .map(function (sh) {
+      const m = sh.getName().match(/^Scores\s+(\d+)$/i);
+      return m ? { round: parseInt(m[1], 10), sheet: sh } : null;
+    })
+    .filter(Boolean)
+    .sort(function (a, b) { return a.round - b.round; });
+
+  if (scoreSheets.length === 0) {
+    Logger.log('rebuildLeaderboard: no Scores N sheets found.');
+    return;
+  }
+
+  // For each sheet read Email, TeamName, TotalPoints
+  // Map: email → { teamName, roundPoints: { round: pts } }
+  const teamData = new Map();
+
+  for (const { round, sheet } of scoreSheets) {
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2) continue;
+
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+      .map(function (h) { return String(h).trim(); });
+    const emailCol = headers.indexOf('Email');
+    const teamCol  = headers.indexOf('TeamName');
+    const ptsCol   = headers.indexOf('TotalPoints');
+    if (emailCol < 0 || ptsCol < 0) continue;
+
+    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    for (const row of data) {
+      const email = String(row[emailCol] || '').trim().toLowerCase();
+      if (!email) continue;
+      const teamName = teamCol >= 0 ? String(row[teamCol] || '').trim() : '';
+      const pts      = Number(row[ptsCol]) || 0;
+
+      if (!teamData.has(email)) {
+        teamData.set(email, { teamName, roundPoints: {} });
+      }
+      const entry = teamData.get(email);
+      // Keep the most recent team name in case it changed
+      if (teamName) entry.teamName = teamName;
+      entry.roundPoints[round] = pts;
+    }
+  }
+
+  // Build output
+  const rounds      = scoreSheets.map(function (s) { return s.round; });
+  const raceHeaders = rounds.map(function (r) { return 'Race ' + r; });
+  const outHeaders  = ['Rank', 'Email', 'TeamName'].concat(raceHeaders).concat(['Total']);
+
+  const rows = [];
+  for (const [email, entry] of teamData) {
+    const racePts = rounds.map(function (r) { return entry.roundPoints[r] || 0; });
+    const total   = racePts.reduce(function (a, b) { return a + b; }, 0);
+    rows.push([null, email, entry.teamName].concat(racePts).concat([total]));
+  }
+
+  // Sort by total descending, then assign rank
+  rows.sort(function (a, b) { return b[b.length - 1] - a[a.length - 1]; });
+  rows.forEach(function (r, i) { r[0] = i + 1; });
+
+  const lbSh = ss.getSheetByName('Leaderboard') || ss.insertSheet('Leaderboard');
+  lbSh.clear();
+  lbSh.getRange(1, 1, 1, outHeaders.length).setValues([outHeaders]).setFontWeight('bold');
+  if (rows.length) {
+    lbSh.getRange(2, 1, rows.length, outHeaders.length).setValues(rows);
+  }
+  lbSh.setFrozenRows(1);
+  lbSh.autoResizeColumns(1, outHeaders.length);
+
+  Logger.log('Leaderboard rebuilt: ' + rows.length + ' teams across ' + rounds.length + ' race(s).');
 }
 
 /* ---------------- Helpers ---------------- */

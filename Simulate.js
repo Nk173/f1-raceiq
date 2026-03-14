@@ -425,6 +425,20 @@ function emailSimulatedScores_() {
    Simulation helpers
    ================================================================ */
 
+/**
+ * Extracts the plain driver name from a form choice string.
+ * Handles both plain names ("Max Verstappen") and the priced format
+ * used by CreateForm.js ("Max Verstappen — 30m").
+ *
+ * @param {string} choice  raw value from the form response
+ * @returns {string}
+ */
+function extractName_(choice) {
+  const s = String(choice || "").trim();
+  const sep = s.indexOf(" — ");
+  return sep >= 0 ? s.slice(0, sep).trim() : s;
+}
+
 function shuffleArray_(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
