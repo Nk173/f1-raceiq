@@ -229,6 +229,8 @@ def main() -> None:
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     print(f"GOOGLE_SERVICE_ACCOUNT_JSON: {'set, length=' + str(len(creds_json)) if creds_json else 'NOT SET — falling back to file'}")
     if creds_json:
+        print(f"First 20 chars: {repr(creds_json[:20])}")
+        print(f"Last  20 chars: {repr(creds_json[-20:])}")
         import json as _json
         creds = service_account.Credentials.from_service_account_info(
             _json.loads(creds_json),
