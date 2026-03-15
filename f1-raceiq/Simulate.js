@@ -310,9 +310,10 @@ function rebuildSimulatedScores_() {
 
     const d1PitPts = [0,0,0];
     const d2PitPts = [0,0,0];
+    const simScLaps = Array.from(scLaps); // race-wide SC laps from simulation
     for (let i = 0; i < 3; i++) {
-      d1PitPts[i] = pitLapPts_(d1p[i] ?? "", r1 ? r1.pitLaps[i] : "", r1 ? r1.scAtPit[i] : false);
-      d2PitPts[i] = pitLapPts_(d2p[i] ?? "", r2 ? r2.pitLaps[i] : "", r2 ? r2.scAtPit[i] : false);
+      d1PitPts[i] = pitLapPts_(d1p[i] ?? "", r1 ? r1.pitLaps[i] : "", simScLaps);
+      d2PitPts[i] = pitLapPts_(d2p[i] ?? "", r2 ? r2.pitLaps[i] : "", simScLaps);
     }
 
     const d1TyStart = r1 ? r1.tyres.start : "";

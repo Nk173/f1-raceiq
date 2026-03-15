@@ -162,6 +162,37 @@ def build_tyre_data_for_driver(timing_app_df: pd.DataFrame, driver_number: str) 
     return starting_tyre, tyre_after
 
 
+def build_all_sc_laps(rc_messages_df: pd.DataFrame) -> str:
+    """
+    Returns a comma-separated string of ALL laps that had an SC/VSC/yellow
+    race control message — race-wide, not limited to actual pit laps.
+    Used by the scoring engine to check if a predicted pit lap was near an SC period.
+    """
+    if rc_messages_df.empty:
+        return ""
+
+    relevant = rc_messages_df.copy()
+    relevant["Lap"] = pd.to_numeric(relevant.get("Lap"), errors="coerce")
+
+    def is_relevant_row(row) -> bool:
+        blob = " ".join([
+            clean_text(row.get("Message", "")).upper(),
+            clean_text(row.get("Category", "")).upper(),
+            clean_text(row.get("Flag", "")).upper(),
+            clean_text(row.get("Status", "")).upper(),
+        ])
+        return (
+            "SAFETY CAR" in blob
+            or "VIRTUAL SAFETY CAR" in blob
+            or "VSC" in blob
+            or "YELLOW" in blob
+        )
+
+    relevant = relevant[relevant.apply(is_relevant_row, axis=1)]
+    sc_laps = sorted(relevant["Lap"].dropna().astype(int).unique().tolist())
+    return ",".join(str(x) for x in sc_laps)
+
+
 def build_sc_flags_for_driver_pits(
     driver_pit_laps: List[Any],
     rc_messages_df: pd.DataFrame
@@ -289,8 +320,12 @@ def main() -> None:
         "TyreAfterPit1", "TyreAfterPit2", "TyreAfterPit3",
         "TyreAfterPit4", "TyreAfterPit5", "TyreAfterPit6",
         "SCAtPit1", "SCAtPit2", "SCAtPit3", "SCAtPit4", "SCAtPit5", "SCAtPit6",
-        "SafetyCarLaps"
+        "SafetyCarLaps",
+        "SafetyCarAllLaps",
     ]
+
+    # Race-wide SC laps (same for every driver row)
+    sc_all_laps = build_all_sc_laps(rc_messages_df)
 
     rows: List[List[Any]] = []
 
@@ -328,7 +363,8 @@ def main() -> None:
             starting_tyre,
             *tyre_after6,
             *sc_flags6,
-            safety_car_laps
+            safety_car_laps,
+            sc_all_laps,
         ])
 
     # --- Upload to Sheets ---

@@ -26,6 +26,14 @@ function rebuildScores() {
 
   const col = makeHeaderIndex_(resHeaders);
 
+  // Parse race-wide SC laps from the first data row (same value for all rows)
+  const scAllLaps = (() => {
+    if (!("SafetyCarAllLaps" in col)) return [];
+    const raw = String(resData[0]?.[col.SafetyCarAllLaps] || "").trim();
+    if (!raw) return [];
+    return raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  })();
+
   const req = [
     "Driver","Team","StartingPosition","FinalPosition","TotalLaps","PitStopCount",
     "PitLap1","PitLap2","PitLap3","PitLap4","PitLap5","PitLap6",
@@ -209,17 +217,11 @@ function rebuildScores() {
     const d2PitPts = [0, 0, 0];
 
     for (let i = 0; i < 3; i++) {
-      const pred = d1p[i] ?? "";
-      const act = d1PitActual[i] ?? "";
-      const sc = d1SC[i] ?? false;
-      d1PitPts[i] = pitLapPts_(pred, act, sc);
+      d1PitPts[i] = pitLapPts_(d1p[i] ?? "", d1PitActual[i] ?? "", scAllLaps);
     }
 
     for (let i = 0; i < 3; i++) {
-      const pred = d2p[i] ?? "";
-      const act = d2PitActual[i] ?? "";
-      const sc = d2SC[i] ?? false;
-      d2PitPts[i] = pitLapPts_(pred, act, sc);
+      d2PitPts[i] = pitLapPts_(d2p[i] ?? "", d2PitActual[i] ?? "", scAllLaps);
     }
 
     // Tyres
@@ -459,28 +461,29 @@ function pitCountPts_(predictedCount, actualCount) {
  *   ±1    = 20
  *   ±2    = 15
  *
- * SC/VSC contingency only:
- *   if stop happened under SC/VSC, then predicted within
- *   actual - 5 to actual + 2 also gets 15
+ * SC/VSC contingency:
+ *   If any SC/VSC lap falls within [predicted − 5, predicted + 2],
+ *   the player gets 15 points (exact / ±1 / ±2 still take priority).
  *
- * Note:
- * - This does NOT apply to yellow sectors
- * - Exact / ±1 / ±2 still take priority
+ * @param {number|string} pred      predicted pit lap
+ * @param {number|string} actual    actual pit lap
+ * @param {number[]}      scLaps    all SC/VSC laps in the race
  */
-function pitLapPts_(pred, actual, safetyCar) {
+function pitLapPts_(pred, actual, scLaps) {
   const p = Number(pred);
   const a = Number(actual);
   if (!p || !a || isNaN(p) || isNaN(a)) return 0;
 
   const d = Math.abs(p - a);
-
   if (d === 0) return 25;
-  if (d <= 1) return 20;
-  if (d <= 2) return 15;
+  if (d <= 1)  return 20;
+  if (d <= 2)  return 15;
 
-  if (safetyCar) {
-    const diff = p - a; // positive = predicted later than actual
-    if (diff >= -5 && diff <= 2) return 15;
+  // SC/VSC contingency: any SC lap in [pred-5, pred+2] → 15 pts
+  if (Array.isArray(scLaps) && scLaps.length > 0) {
+    const lo = p - 5;
+    const hi = p + 2;
+    if (scLaps.some(lap => lap >= lo && lap <= hi)) return 15;
   }
 
   return 0;
