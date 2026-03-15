@@ -1,0 +1,67 @@
+name: Fetch Race Results (FastF1)
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+#
+# 1. Scheduled: update the cron below to 1 hour after each race start (UTC).
+#    Format: 'minute hour day month *'
+#    Example: Chinese GP 2026 starts ~07:00 UTC on 23 Mar → trigger at 11:00 UTC (4h after start).
+#
+# 2. Manual: run from the Actions tab at any time, specifying year + round.
+#
+on:
+  schedule:
+    - cron: '0 11 23 3 *'   # ← UPDATE THIS each race: MM HH DD MM * (UTC, 4h after start)
+
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'F1 season year'
+        required: true
+        default: '2026'
+      round:
+        description: 'Race round number'
+        required: true
+        default: '2'
+
+# ── Job ───────────────────────────────────────────────────────────────────────
+jobs:
+  fetch-results:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache FastF1 data
+        uses: actions/cache@v4
+        with:
+          path: f1-raceiq/fastf1/fastf1_cache
+          key: fastf1-cache-${{ github.event.inputs.year || '2026' }}-r${{ github.event.inputs.round || '2' }}
+          restore-keys: |
+            fastf1-cache-${{ github.event.inputs.year || '2026' }}-
+
+      - name: Install dependencies
+        run: pip install fastf1 pandas google-auth google-api-python-client
+
+      - name: Write service account credentials
+        # Stored as a GitHub secret: Settings → Secrets → GOOGLE_SERVICE_ACCOUNT_JSON
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' \
+            > f1-raceiq/fastf1/service_account.json
+
+      - name: Fetch and upload results
+        env:
+          F1_YEAR:   ${{ github.event.inputs.year  || '2026' }}
+          F1_ROUND:  ${{ github.event.inputs.round || '2' }}
+        run: |
+          cd f1-raceiq/fastf1
+          python fastf1-sheets.py
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f f1-raceiq/fastf1/service_account.json

@@ -1,0 +1,7 @@
+service_account.json
+*.json.bak
+fastf1_cache/
+__pycache__/
+*.pyc
+.env
+.DS_Store
