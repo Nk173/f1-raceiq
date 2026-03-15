@@ -26,12 +26,25 @@ function rebuildScores() {
 
   const col = makeHeaderIndex_(resHeaders);
 
-  // Parse race-wide SC laps from the first data row (same value for all rows)
+  // Parse race-wide SC laps.
+  // Primary: SafetyCarAllLaps column (added by fastf1-sheets.py after 2026-03-15).
+  // Fallback: collect every pit lap where SCAtPit was YES across all drivers —
+  //   gives a partial SC lap list good enough for the contingency window check.
   const scAllLaps = (() => {
-    if (!("SafetyCarAllLaps" in col)) return [];
-    const raw = String(resData[0]?.[col.SafetyCarAllLaps] || "").trim();
-    if (!raw) return [];
-    return raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    if ("SafetyCarAllLaps" in col) {
+      const raw = String(resData[0]?.[col.SafetyCarAllLaps] || "").trim();
+      if (raw) return raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    }
+    const laps = new Set();
+    for (const r of resData) {
+      for (let i = 1; i <= 6; i++) {
+        if (isYes_(r[col[`SCAtPit${i}`]]) && r[col[`PitLap${i}`]] !== "") {
+          const lap = Number(r[col[`PitLap${i}`]]);
+          if (!isNaN(lap)) laps.add(lap);
+        }
+      }
+    }
+    return Array.from(laps);
   })();
 
   const req = [
