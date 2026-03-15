@@ -48,21 +48,11 @@ jobs:
       - name: Install dependencies
         run: pip install fastf1 pandas google-auth google-api-python-client
 
-      - name: Write service account credentials
-        # Stored as a GitHub secret: Settings → Secrets → GOOGLE_SERVICE_ACCOUNT_JSON
-        env:
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          python3 -c "import os, json; json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON']); open('f1-raceiq/fastf1/service_account.json','w').write(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])"
-
       - name: Fetch and upload results
         env:
-          F1_YEAR:   ${{ github.event.inputs.year  || '2026' }}
-          F1_ROUND:  ${{ github.event.inputs.round || '2' }}
+          F1_YEAR:                    ${{ github.event.inputs.year  || '2026' }}
+          F1_ROUND:                   ${{ github.event.inputs.round || '2' }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           cd f1-raceiq/fastf1
           python fastf1-sheets.py
-
-      - name: Clean up credentials
-        if: always()
-        run: rm -f f1-raceiq/fastf1/service_account.json

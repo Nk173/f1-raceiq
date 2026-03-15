@@ -226,10 +226,18 @@ def build_sc_flags_for_driver_pits(
 # =========================
 def main() -> None:
     # --- Google Sheets auth ---
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE,
-        scopes=SCOPES
-    )
+    creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if creds_json:
+        import json as _json
+        creds = service_account.Credentials.from_service_account_info(
+            _json.loads(creds_json),
+            scopes=SCOPES
+        )
+    else:
+        creds = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE,
+            scopes=SCOPES
+        )
     service = build("sheets", "v4", credentials=creds)
 
     # --- FastF1 setup ---
