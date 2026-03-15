@@ -50,9 +50,10 @@ jobs:
 
       - name: Write service account credentials
         # Stored as a GitHub secret: Settings → Secrets → GOOGLE_SERVICE_ACCOUNT_JSON
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
-          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' \
-            > f1-raceiq/fastf1/service_account.json
+          python3 -c "import os, json; json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON']); open('f1-raceiq/fastf1/service_account.json','w').write(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])"
 
       - name: Fetch and upload results
         env:
