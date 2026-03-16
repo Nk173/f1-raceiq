@@ -1,6 +1,7 @@
 service_account.json
 *.json.bak
 fastf1_cache/
+fastf1/
 __pycache__/
 *.pyc
 .env
