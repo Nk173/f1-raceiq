@@ -4,14 +4,15 @@ function rebuildScores() {
   // Write per-race scores to "Scores {round}" (e.g. "Scores 2")
   const props       = PropertiesService.getScriptProperties();
   const activeRound = parseInt(props.getProperty('WF_ACTIVE_ROUND') || '0', 10);
-  const scoresName  = activeRound > 0 ? 'Scores ' + activeRound : 'Scores';
+  const scoresName  = activeRound > 0 ? 'Scores '  + activeRound : 'Scores';
   const resultsName = activeRound > 0 ? 'Results ' + activeRound : 'Results 2';
+  const choicesName = activeRound > 0 ? 'Choices ' + activeRound : 'Choices';
 
-  const formSh  = ss.getSheetByName("Choices");
+  const formSh  = ss.getSheetByName(choicesName);
   const resSh   = ss.getSheetByName(resultsName);
   const scoreSh = ss.getSheetByName(scoresName) || ss.insertSheet(scoresName);
 
-  if (!formSh) throw new Error("Missing sheet: Choices");
+  if (!formSh) throw new Error("Missing sheet: " + choicesName);
   if (!resSh)  throw new Error("Missing sheet: " + resultsName);
 
   // ----- Read Results -----
@@ -26,26 +27,6 @@ function rebuildScores() {
 
   const col = makeHeaderIndex_(resHeaders);
 
-  // Parse race-wide SC laps.
-  // Primary: SafetyCarAllLaps column (added by fastf1-sheets.py after 2026-03-15).
-  // Fallback: collect every pit lap where SCAtPit was YES across all drivers —
-  //   gives a partial SC lap list good enough for the contingency window check.
-  const scAllLaps = (() => {
-    if ("SafetyCarAllLaps" in col) {
-      const raw = String(resData[0]?.[col.SafetyCarAllLaps] || "").trim();
-      if (raw) return raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-    }
-    const laps = new Set();
-    for (const r of resData) {
-      for (let i = 1; i <= 6; i++) {
-        if (isYes_(r[col[`SCAtPit${i}`]]) && r[col[`PitLap${i}`]] !== "") {
-          const lap = Number(r[col[`PitLap${i}`]]);
-          if (!isNaN(lap)) laps.add(lap);
-        }
-      }
-    }
-    return Array.from(laps);
-  })();
 
   const req = [
     "Driver","Team","StartingPosition","FinalPosition","TotalLaps","PitStopCount",
@@ -230,11 +211,11 @@ function rebuildScores() {
     const d2PitPts = [0, 0, 0];
 
     for (let i = 0; i < 3; i++) {
-      d1PitPts[i] = pitLapPts_(d1p[i] ?? "", d1PitActual[i] ?? "", scAllLaps);
+      d1PitPts[i] = pitLapPts_(d1p[i] ?? "", d1PitActual[i] ?? "", d1SC[i]);
     }
 
     for (let i = 0; i < 3; i++) {
-      d2PitPts[i] = pitLapPts_(d2p[i] ?? "", d2PitActual[i] ?? "", scAllLaps);
+      d2PitPts[i] = pitLapPts_(d2p[i] ?? "", d2PitActual[i] ?? "", d2SC[i]);
     }
 
     // Tyres
@@ -475,14 +456,15 @@ function pitCountPts_(predictedCount, actualCount) {
  *   ±2    = 15
  *
  * SC/VSC contingency:
- *   If any SC/VSC lap falls within [predicted − 5, predicted + 2],
- *   the player gets 15 points (exact / ±1 / ±2 still take priority).
+ *   If the actual pit was under SC/VSC (scAtPit = true) AND the actual
+ *   pit lap falls within [predicted − 5, predicted + 2], award 15 pts.
+ *   Normal scoring takes priority (exact/±1/±2 are checked first).
  *
  * @param {number|string} pred      predicted pit lap
  * @param {number|string} actual    actual pit lap
- * @param {number[]}      scLaps    all SC/VSC laps in the race
+ * @param {boolean}       scAtPit   whether this stop was under SC/VSC
  */
-function pitLapPts_(pred, actual, scLaps) {
+function pitLapPts_(pred, actual, scAtPit) {
   const p = Number(pred);
   const a = Number(actual);
   if (!p || !a || isNaN(p) || isNaN(a)) return 0;
@@ -492,12 +474,8 @@ function pitLapPts_(pred, actual, scLaps) {
   if (d <= 1)  return 20;
   if (d <= 2)  return 15;
 
-  // SC/VSC contingency: any SC lap in [pred-5, pred+2] → 15 pts
-  if (Array.isArray(scLaps) && scLaps.length > 0) {
-    const lo = p - 5;
-    const hi = p + 2;
-    if (scLaps.some(lap => lap >= lo && lap <= hi)) return 15;
-  }
+  // SC/VSC contingency: actual pit was under SC and actual lap is in [pred-5, pred+2]
+  if (scAtPit && a >= p - 5 && a <= p + 2) return 15;
 
   return 0;
 }

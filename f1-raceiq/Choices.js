@@ -74,8 +74,9 @@ function rebuildChoicesLatestPerEmail() {
     .sort(function (a, b) { return a.timestamp - b.timestamp; })
     .map(function (x) { return x.row; });
 
-  // Write to "Choices" sheet
-  const targetSh = ss.getSheetByName('Choices') || ss.insertSheet('Choices');
+  // Write to "Choices {round}" sheet (e.g. "Choices 2")
+  const choicesName = activeRound > 0 ? 'Choices ' + activeRound : 'Choices';
+  const targetSh = ss.getSheetByName(choicesName) || ss.insertSheet(choicesName);
   targetSh.clear();
   targetSh.getRange(1, 1, 1, headers.length).setValues([headers]);
 
@@ -86,6 +87,6 @@ function rebuildChoicesLatestPerEmail() {
   targetSh.setFrozenRows(1);
   targetSh.autoResizeColumns(1, headers.length);
 
-  Logger.log('Choices rebuilt from "' + sourceName + '": ' +
+  Logger.log(choicesName + ' rebuilt from "' + sourceName + '": ' +
              outputRows.length + ' unique entries.');
 }
