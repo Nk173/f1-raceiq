@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/raceiq-retro.gif" alt="RaceIQ retro racing animation" width="300">
+</p>
+
 # RaceIQ — F1 Pit Strategy Prediction Game
 
 RaceIQ is a race-weekend prediction game built around Formula 1 pit strategy. Players select two drivers within a budget and predict each driver's pit stop laps and tyre compounds. Submissions are scored after the race using live telemetry data from the FastF1 API.
