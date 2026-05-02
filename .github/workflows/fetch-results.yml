@@ -2,15 +2,15 @@ name: Fetch Race Results (FastF1)
 
 # ── Triggers ──────────────────────────────────────────────────────────────────
 #
-# 1. Scheduled: update the cron below to 1 hour after each race start (UTC).
+# 1. Scheduled: update the cron below to ~4 hours after each race start (UTC).
 #    Format: 'minute hour day month *'
-#    Example: Chinese GP 2026 starts ~07:00 UTC on 23 Mar → trigger at 11:00 UTC (4h after start).
+#    Example: Miami/RaceIQ Round 6 starts 20:00 UTC on 3 May → trigger at 00:00 UTC on 4 May.
 #
 # 2. Manual: run from the Actions tab at any time, specifying year + round.
 #
 on:
   schedule:
-    - cron: '0 11 23 3 *'   # ← UPDATE THIS each race: MM HH DD MM * (UTC, 4h after start)
+    - cron: '0 0 4 5 *'     # RaceIQ Round 6: Miami 2026, 4h after May 3 race start (UTC)
 
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ on:
       round:
         description: 'Race round number'
         required: true
-        default: '2'
+        default: '6'
 
 # ── Job ───────────────────────────────────────────────────────────────────────
 jobs:
@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: f1-raceiq/fastf1/fastf1_cache
-          key: fastf1-cache-${{ github.event.inputs.year || '2026' }}-r${{ github.event.inputs.round || '2' }}
+          key: fastf1-cache-${{ github.event.inputs.year || '2026' }}-r${{ github.event.inputs.round || '6' }}
           restore-keys: |
             fastf1-cache-${{ github.event.inputs.year || '2026' }}-
 
@@ -51,7 +51,7 @@ jobs:
       - name: Fetch and upload results
         env:
           F1_YEAR:                    ${{ github.event.inputs.year  || '2026' }}
-          F1_ROUND:                   ${{ github.event.inputs.round || '2' }}
+          F1_ROUND:                   ${{ github.event.inputs.round || '6' }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           cd f1-raceiq/fastf1

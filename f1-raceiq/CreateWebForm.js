@@ -14,7 +14,7 @@
  *  3. Before each race weekend: RaceIQ menu → "Set Active Round (Web Form)"
  *
  * Google Drive "Assets" folder must contain:
- *   {round}.png   — race cover photo  (e.g. "2.png")
+ *   {round}.png/.jpeg/.jpg — race cover photo  (e.g. "2.png" or "6.jpeg")
  *   line-up.png   — driver line-up graphic
  *   Pricing.xlsx  — columns "Driver" and "Value"
  *
@@ -137,7 +137,7 @@ function wfBuildConfig_() {
     raceName,
     closeStr:  wfFormatCloseTime_(closeTime, -30),
     drivers,
-    coverImg:  wfGetImageBase64_(round + '.png'),
+    coverImg:  wfGetRoundImageBase64_(round),
     lineupImg: wfGetImageBase64_('line-up.png'),
   };
 }
@@ -273,13 +273,32 @@ function setActiveRoundForWebForm() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns the round cover image from the Assets folder.
+ * Tries PNG first to preserve existing behavior, then JPEG variants.
+ *
+ * @param {number|string} round
+ * @returns {string}
+ */
+function wfGetRoundImageBase64_(round) {
+  const baseName = String(round);
+  const filenames = [baseName + '.png', baseName + '.jpeg', baseName + '.jpg'];
+  for (const filename of filenames) {
+    const img = wfGetImageBase64_(filename, true);
+    if (img) return img;
+  }
+  Logger.log('No round cover image found in Assets folder for round: ' + round);
+  return '';
+}
+
+/**
  * Returns a data: URL (base64) for the named file in the Drive Assets folder.
  * Returns an empty string if the file cannot be found.
  *
  * @param {string} filename  e.g. "2.png" or "line-up.png"
+ * @param {boolean=} quietNotFound  When true, suppress per-file not-found logs.
  * @returns {string}
  */
-function wfGetImageBase64_(filename) {
+function wfGetImageBase64_(filename, quietNotFound) {
   try {
     const folders = DriveApp.getFoldersByName(WF_ASSETS_FOLDER_);
     if (!folders.hasNext()) {
@@ -288,7 +307,7 @@ function wfGetImageBase64_(filename) {
     }
     const files = folders.next().getFilesByName(filename);
     if (!files.hasNext()) {
-      Logger.log('File not found in Assets folder: ' + filename);
+      if (!quietNotFound) Logger.log('File not found in Assets folder: ' + filename);
       return '';
     }
     const blob = files.next().getBlob();
