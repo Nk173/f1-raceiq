@@ -6,7 +6,9 @@ name: Fetch Race Results (FastF1)
 #    Format: 'minute hour day month *'
 #    Example: Miami/RaceIQ Round 6 starts 20:00 UTC on 3 May → trigger at 00:00 UTC on 4 May.
 #
-# 2. Manual: run from the Actions tab at any time, specifying year + round.
+# 2. Manual: run from the Actions tab at any time, specifying:
+#    - RaceIQ round: controls "Results N" and must match Race N / Choices N
+#    - FastF1 event: controls which real F1 race is fetched
 #
 on:
   schedule:
@@ -18,12 +20,12 @@ on:
         description: 'F1 season year'
         required: true
         default: '2026'
-      round:
-        description: 'Race round number'
+      raceiq_round:
+        description: 'RaceIQ round number for sheet names, e.g. Results 6'
         required: true
         default: '6'
       event:
-        description: 'FastF1 event name'
+        description: 'FastF1 event name to fetch'
         required: false
         default: 'Miami Grand Prix'
 
@@ -48,7 +50,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: f1-raceiq/fastf1/fastf1_cache
-          key: fastf1-cache-${{ github.event.inputs.year || '2026' }}-r${{ github.event.inputs.round || '6' }}
+          key: fastf1-cache-${{ github.event.inputs.year || '2026' }}-${{ github.event.inputs.event || 'Miami Grand Prix' }}
           restore-keys: |
             fastf1-cache-${{ github.event.inputs.year || '2026' }}-
 
@@ -58,7 +60,7 @@ jobs:
       - name: Fetch and upload results
         env:
           F1_YEAR:                    ${{ github.event.inputs.year  || '2026' }}
-          F1_ROUND:                   ${{ github.event.inputs.round || '6' }}
+          RACEIQ_ROUND:               ${{ github.event.inputs.raceiq_round || '6' }}
           F1_EVENT:                   ${{ github.event.inputs.event || 'Miami Grand Prix' }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |

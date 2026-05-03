@@ -17,11 +17,11 @@ YEAR  = int(os.environ.get("F1_YEAR",  "2026"))
 # RaceIQ round controls the destination sheet name and the Round column.
 # F1_EVENT controls the FastF1 calendar lookup when RaceIQ round numbers differ
 # from the official championship calendar.
-ROUND = int(os.environ.get("F1_ROUND", "2"))
+RACEIQ_ROUND = int(os.environ.get("RACEIQ_ROUND", os.environ.get("F1_ROUND", "2")))
 EVENT = os.environ.get("F1_EVENT", "").strip()
-EVENT_SELECTOR = EVENT or ROUND
+EVENT_SELECTOR = EVENT or RACEIQ_ROUND
 
-SHEET_NAME = os.environ.get("F1_SHEET_NAME", f"Results {ROUND}")
+SHEET_NAME = os.environ.get("F1_SHEET_NAME", f"Results {RACEIQ_ROUND}")
 RACE_SESSION = "R"
 QUALI_SESSION = "Q"
 
@@ -284,7 +284,7 @@ def main() -> None:
     fastf1.Cache.enable_cache(CACHE_DIR)
 
     # --- Load race session ---
-    print(f"RaceIQ round: {ROUND}")
+    print(f"RaceIQ round: {RACEIQ_ROUND}")
     print(f"FastF1 event selector: {EVENT_SELECTOR!r}")
     race_session = fastf1.get_session(YEAR, EVENT_SELECTOR, RACE_SESSION)
     race_session.load()
@@ -359,7 +359,7 @@ def main() -> None:
         rows.append([
             clean_text(race_session.event["EventName"]),
             YEAR,
-            ROUND,
+            RACEIQ_ROUND,
             full_name,
             team_name,
             grid_pos,
