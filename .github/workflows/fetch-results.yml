@@ -22,6 +22,10 @@ on:
         description: 'Race round number'
         required: true
         default: '6'
+      event:
+        description: 'FastF1 event name'
+        required: false
+        default: 'Miami Grand Prix'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -55,6 +59,7 @@ jobs:
         env:
           F1_YEAR:                    ${{ github.event.inputs.year  || '2026' }}
           F1_ROUND:                   ${{ github.event.inputs.round || '6' }}
+          F1_EVENT:                   ${{ github.event.inputs.event || 'Miami Grand Prix' }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           cd f1-raceiq/fastf1

@@ -14,7 +14,12 @@ from googleapiclient.discovery import build
 SPREADSHEET_ID = "1ltjPEwrh_jQC-KpBGmST-REirrXNa2bxjI8sNHNg0is"
 
 YEAR  = int(os.environ.get("F1_YEAR",  "2026"))
-ROUND = int(os.environ.get("F1_ROUND", "2"))   # e.g. 2 for Chinese GP
+# RaceIQ round controls the destination sheet name and the Round column.
+# F1_EVENT controls the FastF1 calendar lookup when RaceIQ round numbers differ
+# from the official championship calendar.
+ROUND = int(os.environ.get("F1_ROUND", "2"))
+EVENT = os.environ.get("F1_EVENT", "").strip()
+EVENT_SELECTOR = EVENT or ROUND
 
 SHEET_NAME = os.environ.get("F1_SHEET_NAME", f"Results {ROUND}")
 RACE_SESSION = "R"
@@ -279,15 +284,18 @@ def main() -> None:
     fastf1.Cache.enable_cache(CACHE_DIR)
 
     # --- Load race session ---
-    race_session = fastf1.get_session(YEAR, ROUND, RACE_SESSION)
+    print(f"RaceIQ round: {ROUND}")
+    print(f"FastF1 event selector: {EVENT_SELECTOR!r}")
+    race_session = fastf1.get_session(YEAR, EVENT_SELECTOR, RACE_SESSION)
     race_session.load()
+    print(f"Loaded event: {race_session.event['EventName']} ({race_session.event['EventDate']})")
 
     race_results = race_session.results.copy()
     laps = race_session.laps.copy()
 
     # --- Load qualifying as grid fallback ---
     try:
-        quali_session = fastf1.get_session(YEAR, ROUND, QUALI_SESSION)
+        quali_session = fastf1.get_session(YEAR, EVENT_SELECTOR, QUALI_SESSION)
         quali_session.load()
         quali_results = quali_session.results.copy()
         grid_by_driver = build_grid_from_quali(quali_results)
